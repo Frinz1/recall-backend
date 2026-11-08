@@ -44,13 +44,15 @@
                 "exec": [
                   "const res = pm.response.json();",
                   "if (res.success && res.data) {",
-                  "    if (res.data.token) {",
-                  "        pm.collectionVariables.set('bearerToken', res.data.token);",
-                  "        console.log('Bearer token saved!');",
+                  "    const at = res.data.rc_at || res.data.token;",
+                  "    const rt = res.data.rc_rt || res.data.refreshToken;",
+                  "    if (at) {",
+                  "        pm.collectionVariables.set('bearerToken', at);",
+                  "        console.log('rc_at saved!');",
                   "    }",
-                  "    if (res.data.refreshToken) {",
-                  "        pm.collectionVariables.set('refreshToken', res.data.refreshToken);",
-                  "        console.log('Refresh token saved!');",
+                  "    if (rt) {",
+                  "        pm.collectionVariables.set('refreshToken', rt);",
+                  "        console.log('rc_rt saved!');",
                   "    }",
                   "}"
                 ],
@@ -82,9 +84,11 @@
               "script": {
                 "exec": [
                   "const res = pm.response.json();",
-                  "if (res.success && res.data && res.data.token) {",
-                  "    pm.collectionVariables.set('bearerToken', res.data.token);",
-                  "    pm.collectionVariables.set('refreshToken', res.data.refreshToken);",
+                  "if (res.success && res.data) {",
+                  "    const at = res.data.rc_at || res.data.token;",
+                  "    const rt = res.data.rc_rt || res.data.refreshToken;",
+                  "    if (at) pm.collectionVariables.set('bearerToken', at);",
+                  "    if (rt) pm.collectionVariables.set('refreshToken', rt);",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -125,8 +129,9 @@
               "script": {
                 "exec": [
                   "const res = pm.response.json();",
-                  "if (res.success && res.data && res.data.token) {",
-                  "    pm.collectionVariables.set('bearerToken', res.data.token);",
+                  "if (res.success && res.data) {",
+                  "    const at = res.data.rc_at || res.data.token;",
+                  "    if (at) pm.collectionVariables.set('bearerToken', at);",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -139,7 +144,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+              "raw": "{\n  \"rc_rt\": \"{{refreshToken}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/auth/refresh-token",
@@ -155,7 +160,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+              "raw": "{\n  \"rc_rt\": \"{{refreshToken}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/auth/logout",

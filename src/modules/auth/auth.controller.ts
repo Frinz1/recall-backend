@@ -17,9 +17,14 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-const refreshSchema = z.object({
-  refreshToken: z.string().min(1),
-});
+const refreshSchema = z
+  .object({
+    rc_rt: z.string().min(1).optional(),
+    refreshToken: z.string().min(1).optional(),
+  })
+  .refine((data) => data.rc_rt || data.refreshToken, {
+    message: 'rc_rt or refreshToken is required',
+  });
 
 export class AuthController {
   public static async register(req: Request, res: Response) {
@@ -103,6 +108,8 @@ export class AuthController {
         success: true,
         message: 'Account registered successfully.',
         data: {
+          rc_at: token,
+          rc_rt: refreshTokenString,
           token,
           refreshToken: refreshTokenString,
           user: { id: user.id, email: user.email, name: user.name },
@@ -152,6 +159,8 @@ export class AuthController {
         success: true,
         message: 'Login successful.',
         data: {
+          rc_at: token,
+          rc_rt: refreshTokenString,
           token,
           refreshToken: refreshTokenString,
           user: { id: user.id, email: user.email, name: user.name },
@@ -169,7 +178,7 @@ export class AuthController {
         return res.status(400).json({ success: false, errors: parsed.error.errors });
       }
 
-      const { refreshToken } = parsed.data;
+      const refreshToken = parsed.data.rc_rt || parsed.data.refreshToken!;
 
       const tokenRecord = await prisma.refreshToken.findUnique({
         where: { token: refreshToken },
@@ -189,6 +198,7 @@ export class AuthController {
       return res.json({
         success: true,
         data: {
+          rc_at: newAccessToken,
           token: newAccessToken,
         },
       });
@@ -199,10 +209,11 @@ export class AuthController {
 
   public static async logout(req: Request, res: Response) {
     try {
-      const { refreshToken } = req.body;
-      if (refreshToken) {
+      const { rc_rt, refreshToken } = req.body;
+      const tokenToDelete = rc_rt || refreshToken;
+      if (tokenToDelete) {
         await prisma.refreshToken.deleteMany({
-          where: { token: refreshToken },
+          where: { token: tokenToDelete },
         });
       }
       return res.json({ success: true, message: 'Logged out successfully.' });
