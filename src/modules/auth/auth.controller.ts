@@ -47,6 +47,7 @@ const googleAuthSchema = z.object({
     .trim()
     .min(1, 'Name is required'),
   googleId: z.string().optional(),
+  mode: z.enum(['login', 'register']).optional().default('login'),
 });
 
 const loginSchema = z.object({
@@ -213,12 +214,11 @@ export class AuthController {
         success: true,
         message: mailResult.deliveredViaSmtp
           ? `A 6-digit verification code has been sent to ${email}.`
-          : `Verification code generated for ${email}.`,
+          : `Verification code generated for ${email}. Check your Gmail inbox (ensure SMTP_USER and SMTP_PASS are configured in Vercel).`,
         data: {
           email,
           expiresInSeconds: 600,
           deliveredViaSmtp: mailResult.deliveredViaSmtp,
-          otpPreview: mailResult.deliveredViaSmtp ? undefined : otpCode,
         },
       });
     } catch (err: any) {
@@ -306,27 +306,66 @@ export class AuthController {
         });
       }
 
-      const { email, name } = parsed.data;
+      const { email, name, mode } = parsed.data;
 
-      let user = await prisma.user.findUnique({ where: { email } });
-      if (!user) {
-        const randomHash = await bcrypt.hash(`google_oauth_${Date.now()}_${Math.random()}`, 10);
-        user = await prisma.user.create({
-          data: {
-            email,
-            name,
-            passwordHash: randomHash,
-          },
+      const user = await prisma.user.findUnique({ where: { email } });
+
+      if (mode === 'login') {
+        if (!user) {
+          return res.status(401).json({
+            success: false,
+            message: `No registered account found for ${email}. Please switch to Create Account to register first.`,
+          });
+        }
+
+        const sessionData = await issueSessionTokens(user);
+        return res.status(200).json({
+          success: true,
+          message: 'Signed in with Google successfully.',
+          data: sessionData,
         });
-        await provisionStarterContentForUser(user.id);
       }
 
-      const sessionData = await issueSessionTokens(user);
+      // mode === 'register'
+      if (user) {
+        return res.status(400).json({
+          success: false,
+          message: 'An account with this Google email is already registered. Please sign in instead.',
+        });
+      }
+
+      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const randomHash = await bcrypt.hash(`google_oauth_${Date.now()}_${Math.random()}`, 10);
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+      await prisma.emailOtp.upsert({
+        where: { email },
+        update: {
+          name,
+          passwordHash: randomHash,
+          otpCode,
+          expiresAt,
+        },
+        create: {
+          email,
+          name,
+          passwordHash: randomHash,
+          otpCode,
+          expiresAt,
+        },
+      });
+
+      const mailResult = await MailerService.sendRegistrationOtp(email, name, otpCode);
 
       return res.status(200).json({
         success: true,
-        message: 'Signed in with Google successfully.',
-        data: sessionData,
+        message: `A 6-digit verification code has been sent to ${email}.`,
+        data: {
+          requiresOtp: true,
+          email,
+          expiresInSeconds: 600,
+          deliveredViaSmtp: mailResult.deliveredViaSmtp,
+        },
       });
     } catch (err: any) {
       return res.status(500).json({ success: false, message: err.message });
@@ -334,44 +373,7 @@ export class AuthController {
   }
 
   public static async register(req: Request, res: Response) {
-    try {
-      const parsed = registerSchema.safeParse(req.body);
-      if (!parsed.success) {
-        const firstMsg = parsed.error.errors[0]?.message || 'Invalid registration input.';
-        return res.status(400).json({
-          success: false,
-          message: firstMsg,
-          errors: parsed.error.errors,
-        });
-      }
-
-      const { email, password, name } = parsed.data;
-
-      const existing = await prisma.user.findUnique({ where: { email } });
-      if (existing) {
-        return res.status(400).json({ success: false, message: 'Email is already registered.' });
-      }
-
-      const passwordHash = await bcrypt.hash(password, 10);
-      const user = await prisma.user.create({
-        data: {
-          email,
-          passwordHash,
-          name,
-        },
-      });
-
-      await provisionStarterContentForUser(user.id);
-      const sessionData = await issueSessionTokens(user);
-
-      return res.status(201).json({
-        success: true,
-        message: 'Account registered successfully.',
-        data: sessionData,
-      });
-    } catch (err: any) {
-      return res.status(500).json({ success: false, message: err.message });
-    }
+    return AuthController.requestRegistrationOtp(req, res);
   }
 
   public static async login(req: Request, res: Response) {
