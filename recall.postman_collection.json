@@ -1,0 +1,330 @@
+{
+  "info": {
+    "name": "Recall Cloud REST API",
+    "description": "Production-ready Postman collection for Recall: Smart Flashcards & Learning Companion. Features automatic JWT bearer token handling.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://recall-backend-one.vercel.app/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "bearerToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{bearerToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "1. Authentication",
+      "item": [
+        {
+          "name": "Login (Sets Token Automatically)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.success && res.data) {",
+                  "    if (res.data.token) {",
+                  "        pm.collectionVariables.set('bearerToken', res.data.token);",
+                  "        console.log('Bearer token saved!');",
+                  "    }",
+                  "    if (res.data.refreshToken) {",
+                  "        pm.collectionVariables.set('refreshToken', res.data.refreshToken);",
+                  "        console.log('Refresh token saved!');",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"alex@recall.app\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Authenticates user and auto-saves JWT Bearer token into collection variable."
+          }
+        },
+        {
+          "name": "Register New Student",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.success && res.data && res.data.token) {",
+                  "    pm.collectionVariables.set('bearerToken', res.data.token);",
+                  "    pm.collectionVariables.set('refreshToken', res.data.refreshToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Maria Santos\",\n  \"email\": \"maria@recall.app\",\n  \"password\": \"securepassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Get Current Profile (/me)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            }
+          }
+        },
+        {
+          "name": "Refresh Access Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.success && res.data && res.data.token) {",
+                  "    pm.collectionVariables.set('bearerToken', res.data.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh-token",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "refresh-token"]
+            }
+          }
+        },
+        {
+          "name": "Logout (Revoke Refresh Token)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Subjects",
+      "item": [
+        {
+          "name": "Get All Subjects",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/subjects",
+              "host": ["{{baseUrl}}"],
+              "path": ["subjects"]
+            }
+          }
+        },
+        {
+          "name": "Create Subject",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Database Systems\",\n  \"colorHex\": \"#10B981\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/subjects",
+              "host": ["{{baseUrl}}"],
+              "path": ["subjects"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Decks",
+      "item": [
+        {
+          "name": "Get All Decks",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/decks",
+              "host": ["{{baseUrl}}"],
+              "path": ["decks"]
+            }
+          }
+        },
+        {
+          "name": "Create Deck",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"SQL Indexing & B-Trees\",\n  \"description\": \"Clustered vs Non-Clustered Indexes, B+Tree Fanout\",\n  \"colorHex\": \"#6366F1\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/decks",
+              "host": ["{{baseUrl}}"],
+              "path": ["decks"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Flashcards",
+      "item": [
+        {
+          "name": "Get Flashcards (All)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/flashcards",
+              "host": ["{{baseUrl}}"],
+              "path": ["flashcards"]
+            }
+          }
+        },
+        {
+          "name": "Create Flashcard",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deckId\": \"REPLACE_WITH_DECK_ID\",\n  \"question\": \"What is the time complexity of B+Tree search?\",\n  \"answer\": \"O(log n) disk I/O operations.\",\n  \"explanation\": \"Because high fan-out keeps tree height small (typically 3-4 levels).\",\n  \"tags\": [\"Database\", \"Index\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/flashcards",
+              "host": ["{{baseUrl}}"],
+              "path": ["flashcards"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. SM-2 Reviews & Study Sessions",
+      "item": [
+        {
+          "name": "Submit Card Review (SM-2 Calculation)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cardId\": \"REPLACE_WITH_CARD_ID\",\n  \"rating\": 4,\n  \"timeSpentMs\": 6500\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reviews",
+              "host": ["{{baseUrl}}"],
+              "path": ["reviews"]
+            }
+          }
+        },
+        {
+          "name": "Log Study Session",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deckId\": \"REPLACE_WITH_DECK_ID\",\n  \"cardsReviewed\": 12,\n  \"durationSeconds\": 420\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/study-sessions",
+              "host": ["{{baseUrl}}"],
+              "path": ["study-sessions"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Analytics & Weakness Radar",
+      "item": [
+        {
+          "name": "Get Learning Analytics Overview",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/analytics/overview",
+              "host": ["{{baseUrl}}"],
+              "path": ["analytics", "overview"]
+            }
+          }
+        },
+        {
+          "name": "Get Weakness Radar Cards",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/analytics/weak-cards",
+              "host": ["{{baseUrl}}"],
+              "path": ["analytics", "weak-cards"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
