@@ -8,6 +8,7 @@ router.use(authenticateJwt);
 
 router.post('/', StudySessionController.startSession);
 router.post('/:id/complete', StudySessionController.completeSession);
+router.patch('/:id/complete', StudySessionController.completeSession);
 router.get('/', StudySessionController.listSessions);
 
 export default router;
