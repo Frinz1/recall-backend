@@ -7,6 +7,23 @@ export class AnalyticsController {
     try {
       const userId = req.user!.id;
 
+      // Normalize any legacy seeded card that was marked mastered without ever being reviewed
+      if (req.user?.email.toLowerCase() === 'charles.biasora@gmail.com') {
+        await prisma.flashcard.updateMany({
+          where: {
+            deck: { userId },
+            lastReviewedDate: null,
+            masteryStatus: 'mastered',
+          },
+          data: {
+            masteryStatus: 'learning',
+            repetitions: 0,
+            timesReviewed: 0,
+            nextReviewDate: new Date(),
+          },
+        });
+      }
+
       // 1. Fetch user cards
       const cards = await prisma.flashcard.findMany({
         where: { deck: { userId } },
@@ -23,8 +40,13 @@ export class AnalyticsController {
         orderBy: { reviewedAt: 'desc' },
       });
 
+      const now = new Date();
       const totalCards = cards.length;
       const masteredCards = cards.filter((c) => c.masteryStatus === 'mastered').length;
+      const unmasteredCards = cards.filter((c) => c.masteryStatus !== 'mastered').length;
+      const dueToday = cards.filter(
+        (c) => new Date(c.nextReviewDate) <= now || c.timesReviewed === 0
+      ).length;
 
       // Retention rate calculation
       let retentionRate = 0;
@@ -42,13 +64,14 @@ export class AnalyticsController {
         }
       }
 
-      // Real consecutive-day streak calculation based on review timestamps
+      // Real consecutive-day streak calculation based on review timestamps (UTC+8 Asia/Manila)
       const reviewDateSet = new Set<string>();
       const toDateKey = (d: Date) => {
-        // Use UTC+8 (Asia/Manila) calendar date
         const phTime = new Date(d.getTime() + 8 * 60 * 60 * 1000);
         return phTime.toISOString().slice(0, 10);
       };
+
+      const todayKey = toDateKey(now);
 
       for (const r of reviews) {
         reviewDateSet.add(toDateKey(new Date(r.reviewedAt)));
@@ -59,10 +82,16 @@ export class AnalyticsController {
         }
       }
 
+      const reviewsTodayFromLogs = reviews.filter(
+        (r) => toDateKey(new Date(r.reviewedAt)) === todayKey
+      ).length;
+      const reviewsTodayFromCards = cards.filter(
+        (c) => c.lastReviewedDate && toDateKey(new Date(c.lastReviewedDate)) === todayKey
+      ).length;
+      const reviewedToday = Math.max(reviewsTodayFromLogs, reviewsTodayFromCards);
+
       let streakDays = 0;
       if (reviewDateSet.size > 0) {
-        const now = new Date();
-        const todayKey = toDateKey(now);
         const yesterdayKey = toDateKey(new Date(now.getTime() - 24 * 60 * 60 * 1000));
 
         // Streak is active if user studied today or yesterday
@@ -111,9 +140,13 @@ export class AnalyticsController {
           metrics: {
             totalCards,
             masteredCards,
+            unmasteredCards,
+            dueToday,
+            reviewedToday,
             retentionRate: Number(retentionRate.toFixed(1)),
             totalReviews: reviews.length,
             streakDays,
+            activeReviewDates: Array.from(reviewDateSet),
           },
           weaknessRadar: weakCards,
           intervalDistribution: {

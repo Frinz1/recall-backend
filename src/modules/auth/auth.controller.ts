@@ -77,6 +77,19 @@ async function provisionStarterContentForUser(userId: string, userEmail: string)
 
   const existingSubjectCount = await prisma.subject.count({ where: { userId } });
   if (existingSubjectCount > 0) {
+    await prisma.flashcard.updateMany({
+      where: {
+        deck: { userId },
+        lastReviewedDate: null,
+        masteryStatus: 'mastered',
+      },
+      data: {
+        masteryStatus: 'learning',
+        repetitions: 0,
+        timesReviewed: 0,
+        nextReviewDate: new Date(),
+      },
+    });
     return;
   }
 
@@ -147,7 +160,6 @@ async function provisionStarterContentForUser(userId: string, userEmail: string)
 
   const now = new Date();
   const pastDue = new Date(now.getTime() - 2 * 60 * 60 * 1000);
-  const futureDue = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
 
   await prisma.flashcard.createMany({
     data: [
@@ -189,13 +201,13 @@ async function provisionStarterContentForUser(userId: string, userEmail: string)
             'TLS 1.3 reduces the handshake to a single round-trip (1-RTT) by combining key exchange with cipher suite negotiation in ClientHello.',
         explanation: 'It also introduces 0-RTT resumption for returning clients.',
         tags: ['Security', 'TLS/SSL'],
-        repetitions: 4,
-        intervalDays: 14,
-        easeFactor: 2.6,
-        nextReviewDate: futureDue,
-        timesReviewed: 5,
+        repetitions: 0,
+        intervalDays: 0,
+        easeFactor: 2.5,
+        nextReviewDate: now,
+        timesReviewed: 0,
         timesForgot: 0,
-        masteryStatus: 'mastered',
+        masteryStatus: 'learning',
       },
       {
         deckId: osDeck.id,
@@ -220,13 +232,13 @@ async function provisionStarterContentForUser(userId: string, userEmail: string)
         explanation:
             'Counting semaphores allow up to N concurrent threads access to a finite pool of shared resources.',
         tags: ['Threads', 'Synchronization'],
-        repetitions: 3,
-        intervalDays: 7,
+        repetitions: 0,
+        intervalDays: 0,
         easeFactor: 2.5,
-        nextReviewDate: futureDue,
-        timesReviewed: 3,
+        nextReviewDate: now,
+        timesReviewed: 0,
         timesForgot: 0,
-        masteryStatus: 'mastered',
+        masteryStatus: 'learning',
       },
       {
         deckId: dbDeck.id,
@@ -235,13 +247,13 @@ async function provisionStarterContentForUser(userId: string, userEmail: string)
             'Atomicity (all-or-nothing), Consistency (valid state invariants), Isolation (concurrent serializability), Durability (WAL persistence after commit).',
         explanation: 'Write-Ahead Logging (WAL) ensures Atomicity and Durability across power failures.',
         tags: ['Transactions', 'ACID'],
-        repetitions: 5,
-        intervalDays: 21,
-        easeFactor: 2.7,
-        nextReviewDate: futureDue,
-        timesReviewed: 5,
+        repetitions: 0,
+        intervalDays: 0,
+        easeFactor: 2.5,
+        nextReviewDate: now,
+        timesReviewed: 0,
         timesForgot: 0,
-        masteryStatus: 'mastered',
+        masteryStatus: 'learning',
       },
       {
         deckId: dbDeck.id,

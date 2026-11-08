@@ -21,6 +21,23 @@ export class DeckController {
   public static async listDecks(req: AuthRequest, res: Response) {
     try {
       const userId = req.user!.id;
+
+      if (req.user?.email.toLowerCase() === 'charles.biasora@gmail.com') {
+        await prisma.flashcard.updateMany({
+          where: {
+            deck: { userId },
+            lastReviewedDate: null,
+            masteryStatus: 'mastered',
+          },
+          data: {
+            masteryStatus: 'learning',
+            repetitions: 0,
+            timesReviewed: 0,
+            nextReviewDate: new Date(),
+          },
+        });
+      }
+
       const decks = await prisma.deck.findMany({
         where: { userId },
         include: {
