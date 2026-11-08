@@ -1,0 +1,273 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Recall Cloud REST API",
+    "version": "1.0.0",
+    "description": "Production-grade cloud backend for Recall: Smart Flashcards & Learning Companion. Features server-side SuperMemo-2 (SM-2) spaced repetition and Weakness Radar analytics."
+  },
+  "servers": [
+    {
+      "url": "/api/v1",
+      "description": "API v1 Base Endpoint"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/auth/register": {
+      "post": {
+        "summary": "Register a new student account",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password", "name"],
+                "properties": {
+                  "email": { "type": "string", "example": "alex@recall.app" },
+                  "password": { "type": "string", "example": "securepass123" },
+                  "name": { "type": "string", "example": "Alex Cruz" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Account created successfully" }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "Authenticate and obtain JWT & refresh tokens",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "example": "alex@recall.app" },
+                  "password": { "type": "string", "example": "securepass123" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "JWT token issued" }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "summary": "Renew expired access token",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["refreshToken"],
+                "properties": {
+                  "refreshToken": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "New access token generated" }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "summary": "Get authenticated user profile",
+        "responses": {
+          "200": { "description": "Profile details" }
+        }
+      }
+    },
+    "/subjects": {
+      "get": {
+        "summary": "List all subjects created by user",
+        "responses": { "200": { "description": "List of subjects" } }
+      },
+      "post": {
+        "summary": "Create a new subject",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "Operating Systems" },
+                  "colorHex": { "type": "string", "example": "#A855F7" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Subject created" } }
+      }
+    },
+    "/decks": {
+      "get": {
+        "summary": "List all user decks with card & due counts",
+        "responses": { "200": { "description": "Deck array with metrics" } }
+      },
+      "post": {
+        "summary": "Create a new flashcard deck",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title"],
+                "properties": {
+                  "title": { "type": "string", "example": "Computer Architecture" },
+                  "description": { "type": "string", "example": "Pipelining and cache coherence" },
+                  "colorHex": { "type": "string", "example": "#3B82F6" },
+                  "subjectId": { "type": "string", "format": "uuid" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Deck created" } }
+      }
+    },
+    "/decks/{id}": {
+      "get": {
+        "summary": "Get single deck details and its flashcards",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Deck with cards" } }
+      }
+    },
+    "/cards": {
+      "post": {
+        "summary": "Create a flashcard",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["deckId", "question", "answer"],
+                "properties": {
+                  "deckId": { "type": "string" },
+                  "question": { "type": "string" },
+                  "answer": { "type": "string" },
+                  "explanation": { "type": "string" },
+                  "tags": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Card created" } }
+      }
+    },
+    "/reviews": {
+      "post": {
+        "summary": "Submit SM-2 card recall rating",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["cardId", "rating"],
+                "properties": {
+                  "cardId": { "type": "string" },
+                  "rating": { "type": "string", "enum": ["again", "hard", "good", "easy"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Review logged and new SM-2 interval returned" } }
+      }
+    },
+    "/reviews/due": {
+      "get": {
+        "summary": "Get all cards due for review today across all decks",
+        "responses": { "200": { "description": "Due cards list" } }
+      }
+    },
+    "/study-sessions": {
+      "post": {
+        "summary": "Start a study session",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["deckId"],
+                "properties": {
+                  "deckId": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Session initialized" } }
+      }
+    },
+    "/study-sessions/{id}/complete": {
+      "post": {
+        "summary": "Complete a study session with duration and accuracy metrics",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["cardsReviewed", "correctCount", "durationSeconds"],
+                "properties": {
+                  "cardsReviewed": { "type": "integer" },
+                  "correctCount": { "type": "integer" },
+                  "durationSeconds": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Session completed" } }
+      }
+    },
+    "/analytics/overview": {
+      "get": {
+        "summary": "Get global metrics, Weakness Radar, and SM-2 interval distribution",
+        "responses": { "200": { "description": "Learning retention overview" } }
+      }
+    }
+  }
+}
