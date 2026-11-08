@@ -259,6 +259,14 @@ export class DeckController {
         return res.status(404).json({ success: false, message: 'Deck not found.' });
       }
 
+      await prisma.cardReview.deleteMany({
+        where: { userId, card: { deckId: id } },
+      });
+
+      await prisma.studySession.deleteMany({
+        where: { userId, deckId: id },
+      });
+
       await prisma.flashcard.updateMany({
         where: { deckId: id },
         data: {
