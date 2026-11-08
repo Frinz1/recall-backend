@@ -8,4 +8,6 @@ export const ENV = {
   JWT_SECRET: process.env.JWT_SECRET || 'recall_fallback_secret_key',
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
   CORS_ORIGIN: process.env.CORS_ORIGIN || '*',
+  SMTP_USER: process.env.SMTP_USER || '',
+  SMTP_PASS: process.env.SMTP_PASS || '',
 };

@@ -19,11 +19,7 @@ export class DeckController {
         include: {
           subject: true,
           cards: {
-            select: {
-              id: true,
-              nextReviewDate: true,
-              masteryStatus: true,
-            },
+            orderBy: { createdAt: 'asc' },
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -37,11 +33,13 @@ export class DeckController {
 
         return {
           id: deck.id,
+          subjectId: deck.subjectId,
           title: deck.title,
           description: deck.description,
           colorHex: deck.colorHex,
           isFavorite: deck.isFavorite,
           subject: deck.subject,
+          cards: deck.cards,
           totalCards,
           dueCardsCount,
           masteredCount,

@@ -12,7 +12,14 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:push": "prisma db push"
   },
-  "keywords": ["flashcards", "sm2", "spaced-repetition", "express", "prisma", "flutter"],
+  "keywords": [
+    "flashcards",
+    "sm2",
+    "spaced-repetition",
+    "express",
+    "prisma",
+    "flutter"
+  ],
   "author": "Recall Engineering",
   "license": "MIT",
   "dependencies": {
@@ -22,6 +29,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^10.4.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -30,6 +38,7 @@
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^20.14.2",
+    "@types/nodemailer": "^8.0.2",
     "prisma": "^5.15.0",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.4.5"

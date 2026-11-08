@@ -5,16 +5,57 @@ import { z } from 'zod';
 import { prisma } from '../../config/prisma';
 import { ENV } from '../../config/env';
 import { AuthRequest } from '../../middleware/auth.middleware';
+import { MailerService } from '../../services/mailer.service';
 
 const registerSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-  name: z.string().min(2, 'Name must be at least 2 characters'),
+  name: z
+    .string({ required_error: 'Name is required' })
+    .trim()
+    .min(2, 'Name must be at least 2 characters'),
+  email: z
+    .string({ required_error: 'Email is required' })
+    .trim()
+    .toLowerCase()
+    .email('Please enter a valid email address'),
+  password: z
+    .string({ required_error: 'Password is required' })
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number'),
+});
+
+const verifyOtpSchema = z.object({
+  email: z
+    .string({ required_error: 'Email is required' })
+    .trim()
+    .toLowerCase()
+    .email('Please enter a valid email address'),
+  otp: z
+    .string({ required_error: 'Verification code is required' })
+    .trim()
+    .regex(/^\d{6}$/, 'Verification code must be an exact 6-digit number'),
+});
+
+const googleAuthSchema = z.object({
+  email: z
+    .string({ required_error: 'Google email is required' })
+    .trim()
+    .toLowerCase()
+    .email('Invalid Google email address'),
+  name: z
+    .string({ required_error: 'Google display name is required' })
+    .trim()
+    .min(1, 'Name is required'),
+  googleId: z.string().optional(),
 });
 
 const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+  email: z
+    .string({ required_error: 'Email is required' })
+    .trim()
+    .toLowerCase()
+    .email('Please enter a valid email address'),
+  password: z.string({ required_error: 'Password is required' }).min(1, 'Password is required'),
 });
 
 const refreshSchema = z
@@ -26,12 +67,282 @@ const refreshSchema = z
     message: 'rc_rt or refreshToken is required',
   });
 
+async function provisionStarterContentForUser(userId: string): Promise<void> {
+  const netSubject = await prisma.subject.create({
+    data: {
+      userId,
+      name: 'Networking',
+      colorHex: '#3B82F6',
+    },
+  });
+
+  const osSubject = await prisma.subject.create({
+    data: {
+      userId,
+      name: 'Operating Systems',
+      colorHex: '#A855F7',
+    },
+  });
+
+  const netDeck = await prisma.deck.create({
+    data: {
+      userId,
+      subjectId: netSubject.id,
+      title: 'TCP/IP & Routing Architecture',
+      description: 'Transport layer handshakes, CIDR subnetting, ARP, and TLS 1.3.',
+      colorHex: '#3B82F6',
+      isFavorite: true,
+    },
+  });
+
+  const osDeck = await prisma.deck.create({
+    data: {
+      userId,
+      subjectId: osSubject.id,
+      title: 'Kernel & Concurrency Primitives',
+      description: 'Deadlock conditions, mutex vs. semaphore, and virtual memory paging.',
+      colorHex: '#A855F7',
+      isFavorite: false,
+    },
+  });
+
+  await prisma.flashcard.createMany({
+    data: [
+      {
+        deckId: netDeck.id,
+        question: 'Explain the difference between TCP 3-Way Handshake and 4-Way Teardown.',
+        answer:
+          'Handshake establishes reliable connection (SYN -> SYN-ACK -> ACK). Teardown gracefully closes both simplex channels (FIN -> ACK -> FIN -> ACK).',
+        explanation:
+          'Because TCP is full-duplex, each direction must be terminated independently by sending a FIN packet.',
+        tags: ['Transport Layer', 'TCP/IP'],
+      },
+      {
+        deckId: netDeck.id,
+        question: 'What is CIDR Subnetting and why was it introduced to replace classful addressing?',
+        answer:
+          'Classless Inter-Domain Routing (CIDR) uses variable-length subnet masking (/24, /27) to allocate IP addresses efficiently and reduce BGP routing table bloat.',
+        explanation: 'Replaced rigid Class A, B, and C address blocks.',
+        tags: ['IP Addressing', 'Subnets'],
+      },
+      {
+        deckId: osDeck.id,
+        question: 'What are the 4 Coffman conditions required for a Deadlock to occur?',
+        answer: '1. Mutual Exclusion\n2. Hold and Wait\n3. No Preemption\n4. Circular Wait',
+        explanation:
+          'Breaking any single one of these four conditions mathematically guarantees that deadlock cannot occur.',
+        tags: ['Concurrency', 'Deadlocks'],
+      },
+    ],
+  });
+}
+
+async function issueSessionTokens(user: { id: string; email: string; name: string }) {
+  const token = jwt.sign({ id: user.id, email: user.email }, ENV.JWT_SECRET, {
+    expiresIn: '7d',
+  });
+
+  const refreshTokenString = jwt.sign(
+    { id: user.id, jti: `${user.id}_${Date.now()}_${Math.random().toString(36).slice(2)}` },
+    ENV.JWT_SECRET,
+    { expiresIn: '30d' }
+  );
+
+  await prisma.refreshToken.create({
+    data: {
+      userId: user.id,
+      token: refreshTokenString,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  return {
+    rc_at: token,
+    rc_rt: refreshTokenString,
+    user: { id: user.id, email: user.email, name: user.name },
+  };
+}
+
 export class AuthController {
+  public static async requestRegistrationOtp(req: Request, res: Response) {
+    try {
+      const parsed = registerSchema.safeParse(req.body);
+      if (!parsed.success) {
+        const firstMsg = parsed.error.errors[0]?.message || 'Invalid registration details.';
+        return res.status(400).json({
+          success: false,
+          message: firstMsg,
+          errors: parsed.error.errors,
+        });
+      }
+
+      const { email, password, name } = parsed.data;
+
+      const existing = await prisma.user.findUnique({ where: { email } });
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          message: 'An account with this email is already registered. Please sign in instead.',
+        });
+      }
+
+      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const passwordHash = await bcrypt.hash(password, 10);
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+      await prisma.emailOtp.upsert({
+        where: { email },
+        update: {
+          name,
+          passwordHash,
+          otpCode,
+          expiresAt,
+        },
+        create: {
+          email,
+          name,
+          passwordHash,
+          otpCode,
+          expiresAt,
+        },
+      });
+
+      const mailResult = await MailerService.sendRegistrationOtp(email, name, otpCode);
+
+      return res.status(200).json({
+        success: true,
+        message: mailResult.deliveredViaSmtp
+          ? `A 6-digit verification code has been sent to ${email}.`
+          : `Verification code generated for ${email}.`,
+        data: {
+          email,
+          expiresInSeconds: 600,
+          deliveredViaSmtp: mailResult.deliveredViaSmtp,
+          otpPreview: mailResult.deliveredViaSmtp ? undefined : otpCode,
+        },
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  public static async verifyRegistrationOtp(req: Request, res: Response) {
+    try {
+      const parsed = verifyOtpSchema.safeParse(req.body);
+      if (!parsed.success) {
+        const firstMsg = parsed.error.errors[0]?.message || 'Invalid verification code.';
+        return res.status(400).json({
+          success: false,
+          message: firstMsg,
+          errors: parsed.error.errors,
+        });
+      }
+
+      const { email, otp } = parsed.data;
+
+      const otpRecord = await prisma.emailOtp.findUnique({ where: { email } });
+      if (!otpRecord) {
+        return res.status(400).json({
+          success: false,
+          message: 'No pending verification found for this email. Please request a new code.',
+        });
+      }
+
+      if (new Date() > otpRecord.expiresAt) {
+        return res.status(400).json({
+          success: false,
+          message: 'Verification code has expired. Please tap Resend Code.',
+        });
+      }
+
+      if (otpRecord.otpCode !== otp) {
+        return res.status(400).json({
+          success: false,
+          message: 'Incorrect 6-digit verification code. Please check and try again.',
+        });
+      }
+
+      const existing = await prisma.user.findUnique({ where: { email } });
+      if (existing) {
+        await prisma.emailOtp.delete({ where: { email } }).catch(() => {});
+        return res.status(400).json({
+          success: false,
+          message: 'Email is already registered. Please sign in.',
+        });
+      }
+
+      const user = await prisma.user.create({
+        data: {
+          email: otpRecord.email,
+          name: otpRecord.name,
+          passwordHash: otpRecord.passwordHash,
+        },
+      });
+
+      await prisma.emailOtp.delete({ where: { email } }).catch(() => {});
+      await provisionStarterContentForUser(user.id);
+
+      const sessionData = await issueSessionTokens(user);
+
+      return res.status(201).json({
+        success: true,
+        message: 'Email verified and account created successfully.',
+        data: sessionData,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  public static async googleAuth(req: Request, res: Response) {
+    try {
+      const parsed = googleAuthSchema.safeParse(req.body);
+      if (!parsed.success) {
+        const firstMsg = parsed.error.errors[0]?.message || 'Invalid Google account payload.';
+        return res.status(400).json({
+          success: false,
+          message: firstMsg,
+          errors: parsed.error.errors,
+        });
+      }
+
+      const { email, name } = parsed.data;
+
+      let user = await prisma.user.findUnique({ where: { email } });
+      if (!user) {
+        const randomHash = await bcrypt.hash(`google_oauth_${Date.now()}_${Math.random()}`, 10);
+        user = await prisma.user.create({
+          data: {
+            email,
+            name,
+            passwordHash: randomHash,
+          },
+        });
+        await provisionStarterContentForUser(user.id);
+      }
+
+      const sessionData = await issueSessionTokens(user);
+
+      return res.status(200).json({
+        success: true,
+        message: 'Signed in with Google successfully.',
+        data: sessionData,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
   public static async register(req: Request, res: Response) {
     try {
       const parsed = registerSchema.safeParse(req.body);
       if (!parsed.success) {
-        return res.status(400).json({ success: false, errors: parsed.error.errors });
+        const firstMsg = parsed.error.errors[0]?.message || 'Invalid registration input.';
+        return res.status(400).json({
+          success: false,
+          message: firstMsg,
+          errors: parsed.error.errors,
+        });
       }
 
       const { email, password, name } = parsed.data;
@@ -50,68 +361,13 @@ export class AuthController {
         },
       });
 
-      // Default Subject & Deck
-      const defaultSubject = await prisma.subject.create({
-        data: {
-          userId: user.id,
-          name: 'Computer Science',
-          colorHex: '#6366F1',
-        },
-      });
-
-      const defaultDeck = await prisma.deck.create({
-        data: {
-          userId: user.id,
-          subjectId: defaultSubject.id,
-          title: 'Networking & Protocols',
-          description: 'Transport layer, TCP/IP, CIDR subnetting, and TLS handshakes.',
-          colorHex: '#3B82F6',
-        },
-      });
-
-      await prisma.flashcard.createMany({
-        data: [
-          {
-            deckId: defaultDeck.id,
-            question: 'Explain the difference between TCP 3-Way Handshake and 4-Way Teardown.',
-            answer: 'Handshake establishes connection (SYN -> SYN-ACK -> ACK). Teardown gracefully closes both simplex channels (FIN -> ACK -> FIN -> ACK).',
-            explanation: 'Because TCP is full-duplex, each direction must be terminated independently.',
-            tags: ['Networking', 'TCP'],
-          },
-          {
-            deckId: defaultDeck.id,
-            question: 'What is CIDR Subnetting and why was it introduced?',
-            answer: 'Classless Inter-Domain Routing uses variable-length subnet masks (/24, /27) to allocate IP addresses efficiently and mitigate routing table explosion.',
-            explanation: 'Replaced rigid Class A, B, and C addressing.',
-            tags: ['Networking', 'IP'],
-          },
-        ],
-      });
-
-      const token = jwt.sign({ id: user.id, email: user.email }, ENV.JWT_SECRET, {
-        expiresIn: '7d',
-      });
-
-      const refreshTokenString = jwt.sign({ id: user.id }, ENV.JWT_SECRET, {
-        expiresIn: '30d',
-      });
-
-      await prisma.refreshToken.create({
-        data: {
-          userId: user.id,
-          token: refreshTokenString,
-          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        },
-      });
+      await provisionStarterContentForUser(user.id);
+      const sessionData = await issueSessionTokens(user);
 
       return res.status(201).json({
         success: true,
         message: 'Account registered successfully.',
-        data: {
-          rc_at: token,
-          rc_rt: refreshTokenString,
-          user: { id: user.id, email: user.email, name: user.name },
-        },
+        data: sessionData,
       });
     } catch (err: any) {
       return res.status(500).json({ success: false, message: err.message });
@@ -122,45 +378,38 @@ export class AuthController {
     try {
       const parsed = loginSchema.safeParse(req.body);
       if (!parsed.success) {
-        return res.status(400).json({ success: false, errors: parsed.error.errors });
+        const firstMsg = parsed.error.errors[0]?.message || 'Please enter a valid email and password.';
+        return res.status(400).json({
+          success: false,
+          message: firstMsg,
+          errors: parsed.error.errors,
+        });
       }
 
       const { email, password } = parsed.data;
 
       const user = await prisma.user.findUnique({ where: { email } });
       if (!user) {
-        return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+        return res.status(401).json({
+          success: false,
+          message: 'No account found with this email address.',
+        });
       }
 
       const isMatch = await bcrypt.compare(password, user.passwordHash);
       if (!isMatch) {
-        return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+        return res.status(401).json({
+          success: false,
+          message: 'Incorrect password. Please try again.',
+        });
       }
 
-      const token = jwt.sign({ id: user.id, email: user.email }, ENV.JWT_SECRET, {
-        expiresIn: '7d',
-      });
-
-      const refreshTokenString = jwt.sign({ id: user.id }, ENV.JWT_SECRET, {
-        expiresIn: '30d',
-      });
-
-      await prisma.refreshToken.create({
-        data: {
-          userId: user.id,
-          token: refreshTokenString,
-          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        },
-      });
+      const sessionData = await issueSessionTokens(user);
 
       return res.json({
         success: true,
         message: 'Login successful.',
-        data: {
-          rc_at: token,
-          rc_rt: refreshTokenString,
-          user: { id: user.id, email: user.email, name: user.name },
-        },
+        data: sessionData,
       });
     } catch (err: any) {
       return res.status(500).json({ success: false, message: err.message });
@@ -171,7 +420,11 @@ export class AuthController {
     try {
       const parsed = refreshSchema.safeParse(req.body);
       if (!parsed.success) {
-        return res.status(400).json({ success: false, errors: parsed.error.errors });
+        return res.status(400).json({
+          success: false,
+          message: 'Refresh token is required.',
+          errors: parsed.error.errors,
+        });
       }
 
       const refreshToken = parsed.data.rc_rt || parsed.data.refreshToken!;
@@ -195,6 +448,11 @@ export class AuthController {
         success: true,
         data: {
           rc_at: newAccessToken,
+          user: {
+            id: tokenRecord.user.id,
+            email: tokenRecord.user.email,
+            name: tokenRecord.user.name,
+          },
         },
       });
     } catch (err: any) {
