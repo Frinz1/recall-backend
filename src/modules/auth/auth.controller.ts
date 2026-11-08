@@ -110,8 +110,6 @@ export class AuthController {
         data: {
           rc_at: token,
           rc_rt: refreshTokenString,
-          token,
-          refreshToken: refreshTokenString,
           user: { id: user.id, email: user.email, name: user.name },
         },
       });
@@ -161,8 +159,6 @@ export class AuthController {
         data: {
           rc_at: token,
           rc_rt: refreshTokenString,
-          token,
-          refreshToken: refreshTokenString,
           user: { id: user.id, email: user.email, name: user.name },
         },
       });
@@ -199,7 +195,6 @@ export class AuthController {
         success: true,
         data: {
           rc_at: newAccessToken,
-          token: newAccessToken,
         },
       });
     } catch (err: any) {
