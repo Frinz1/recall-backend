@@ -620,4 +620,31 @@ export class AuthController {
       return res.status(500).json({ success: false, message: err.message });
     }
   }
+
+  public static async updateProfile(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+      if (name.length < 2) {
+        return res.status(400).json({
+          success: false,
+          message: 'Display name must be at least 2 characters.',
+        });
+      }
+
+      const updated = await prisma.user.update({
+        where: { id: userId },
+        data: { name },
+        select: { id: true, email: true, name: true, createdAt: true },
+      });
+
+      return res.json({
+        success: true,
+        message: 'Profile updated.',
+        data: updated,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
 }

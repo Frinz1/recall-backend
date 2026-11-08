@@ -10,6 +10,13 @@ const createDeckSchema = z.object({
   colorHex: z.string().optional().default('#6366F1'),
 });
 
+const updateDeckSchema = z.object({
+  title: z.string().min(1).optional(),
+  description: z.string().optional(),
+  subjectId: z.string().optional(),
+  colorHex: z.string().optional(),
+});
+
 export class DeckController {
   public static async listDecks(req: AuthRequest, res: Response) {
     try {
@@ -178,6 +185,90 @@ export class DeckController {
       });
 
       return res.json({ success: true, message: 'Deck deleted successfully.' });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  public static async updateDeck(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user!.id;
+      const { id } = req.params;
+      const parsed = updateDeckSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ success: false, errors: parsed.error.errors });
+      }
+
+      const existing = await prisma.deck.findFirst({ where: { id, userId } });
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Deck not found.' });
+      }
+
+      const dataToUpdate: Record<string, unknown> = {};
+      if (parsed.data.title !== undefined) dataToUpdate.title = parsed.data.title;
+      if (parsed.data.description !== undefined) dataToUpdate.description = parsed.data.description;
+      if (parsed.data.colorHex !== undefined) dataToUpdate.colorHex = parsed.data.colorHex;
+      if (parsed.data.subjectId !== undefined) {
+        const ownedSub = await prisma.subject.findFirst({
+          where: { id: parsed.data.subjectId, userId },
+        });
+        if (ownedSub) {
+          dataToUpdate.subjectId = ownedSub.id;
+        }
+      }
+
+      const updated = await prisma.deck.update({
+        where: { id },
+        data: dataToUpdate,
+        include: {
+          subject: true,
+          cards: { orderBy: { createdAt: 'asc' } },
+        },
+      });
+
+      return res.json({ success: true, data: updated });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  public static async resetDeckProgress(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user!.id;
+      const { id } = req.params;
+
+      const existing = await prisma.deck.findFirst({ where: { id, userId } });
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Deck not found.' });
+      }
+
+      await prisma.flashcard.updateMany({
+        where: { deckId: id },
+        data: {
+          repetitions: 0,
+          intervalDays: 0,
+          easeFactor: 2.5,
+          nextReviewDate: new Date(),
+          lastReviewedDate: null,
+          timesReviewed: 0,
+          timesForgot: 0,
+          masteryStatus: 'learning',
+        },
+      });
+
+      const updated = await prisma.deck.findFirst({
+        where: { id, userId },
+        include: {
+          subject: true,
+          cards: { orderBy: { createdAt: 'asc' } },
+        },
+      });
+
+      return res.json({
+        success: true,
+        message: 'Deck study progress reset.',
+        data: updated,
+      });
     } catch (err: any) {
       return res.status(500).json({ success: false, message: err.message });
     }

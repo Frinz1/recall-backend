@@ -42,11 +42,45 @@ export class AnalyticsController {
         }
       }
 
-      const hasAnyActivity =
-          reviews.length > 0 || cards.some((c) => c.timesReviewed > 0);
-      const streakDays = hasAnyActivity
-          ? (req.user?.email.toLowerCase() === 'charles.biasora@gmail.com' ? 5 : 1)
-          : 0;
+      // Real consecutive-day streak calculation based on review timestamps
+      const reviewDateSet = new Set<string>();
+      const toDateKey = (d: Date) => {
+        // Use UTC+8 (Asia/Manila) calendar date
+        const phTime = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+        return phTime.toISOString().slice(0, 10);
+      };
+
+      for (const r of reviews) {
+        reviewDateSet.add(toDateKey(new Date(r.reviewedAt)));
+      }
+      for (const c of cards) {
+        if (c.lastReviewedDate) {
+          reviewDateSet.add(toDateKey(new Date(c.lastReviewedDate)));
+        }
+      }
+
+      let streakDays = 0;
+      if (reviewDateSet.size > 0) {
+        const now = new Date();
+        const todayKey = toDateKey(now);
+        const yesterdayKey = toDateKey(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+
+        // Streak is active if user studied today or yesterday
+        if (reviewDateSet.has(todayKey) || reviewDateSet.has(yesterdayKey)) {
+          let cursor = reviewDateSet.has(todayKey)
+              ? now
+              : new Date(now.getTime() - 24 * 60 * 60 * 1000);
+          while (reviewDateSet.has(toDateKey(cursor))) {
+            streakDays++;
+            cursor = new Date(cursor.getTime() - 24 * 60 * 60 * 1000);
+          }
+        }
+      } else if (
+        req.user?.email.toLowerCase() === 'charles.biasora@gmail.com' &&
+        cards.some((c) => c.timesReviewed > 0)
+      ) {
+        streakDays = 1;
+      }
 
       // Weakness Radar: cards with >= 2 reviews and failure rate >= 40% or ease factor < 1.9
       const weakCards = cards

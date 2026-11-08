@@ -4,12 +4,20 @@ import { prisma } from '../../config/prisma';
 import { AuthRequest } from '../../middleware/auth.middleware';
 
 const cardSchema = z.object({
-  deckId: z.string().uuid(),
+  deckId: z.string().min(1),
   question: z.string().min(1),
   answer: z.string().min(1),
   explanation: z.string().optional().default(''),
   tags: z.array(z.string()).optional().default([]),
   cardType: z.string().optional().default('standard'),
+});
+
+const updateCardSchema = z.object({
+  question: z.string().min(1).optional(),
+  answer: z.string().min(1).optional(),
+  explanation: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  cardType: z.string().optional(),
 });
 
 export class FlashcardController {
@@ -65,6 +73,35 @@ export class FlashcardController {
       await prisma.flashcard.delete({ where: { id } });
 
       return res.json({ success: true, message: 'Flashcard deleted successfully.' });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  public static async updateCard(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user!.id;
+      const { id } = req.params;
+      const parsed = updateCardSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ success: false, errors: parsed.error.errors });
+      }
+
+      const card = await prisma.flashcard.findUnique({
+        where: { id },
+        include: { deck: true },
+      });
+
+      if (!card || card.deck.userId !== userId) {
+        return res.status(404).json({ success: false, message: 'Card not found or unauthorized.' });
+      }
+
+      const updated = await prisma.flashcard.update({
+        where: { id },
+        data: parsed.data,
+      });
+
+      return res.json({ success: true, data: updated });
     } catch (err: any) {
       return res.status(500).json({ success: false, message: err.message });
     }
