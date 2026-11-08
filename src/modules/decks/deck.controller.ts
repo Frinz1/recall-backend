@@ -6,7 +6,7 @@ import { AuthRequest } from '../../middleware/auth.middleware';
 const createDeckSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional().default(''),
-  subjectId: z.string().uuid().optional(),
+  subjectId: z.string().optional(),
   colorHex: z.string().optional().default('#6366F1'),
 });
 
@@ -100,6 +100,15 @@ export class DeckController {
       }
 
       let subjectId = parsed.data.subjectId;
+      if (subjectId) {
+        const ownedSubject = await prisma.subject.findFirst({
+          where: { id: subjectId, userId },
+        });
+        if (!ownedSubject) {
+          subjectId = undefined;
+        }
+      }
+
       if (!subjectId) {
         let firstSubject = await prisma.subject.findFirst({ where: { userId } });
         if (!firstSubject) {
@@ -118,9 +127,21 @@ export class DeckController {
           description: parsed.data.description,
           colorHex: parsed.data.colorHex,
         },
+        include: {
+          subject: true,
+          cards: true,
+        },
       });
 
-      return res.status(201).json({ success: true, data: deck });
+      return res.status(201).json({
+        success: true,
+        data: {
+          ...deck,
+          totalCards: 0,
+          dueCardsCount: 0,
+          masteredCount: 0,
+        },
+      });
     } catch (err: any) {
       return res.status(500).json({ success: false, message: err.message });
     }

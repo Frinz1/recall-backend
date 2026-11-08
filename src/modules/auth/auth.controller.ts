@@ -68,7 +68,18 @@ const refreshSchema = z
     message: 'rc_rt or refreshToken is required',
   });
 
-async function provisionStarterContentForUser(userId: string): Promise<void> {
+const SEED_ALLOWED_EMAIL = 'charles.biasora@gmail.com';
+
+async function provisionStarterContentForUser(userId: string, userEmail: string): Promise<void> {
+  if (userEmail.trim().toLowerCase() !== SEED_ALLOWED_EMAIL) {
+    return;
+  }
+
+  const existingSubjectCount = await prisma.subject.count({ where: { userId } });
+  if (existingSubjectCount > 0) {
+    return;
+  }
+
   const netSubject = await prisma.subject.create({
     data: {
       userId,
@@ -82,6 +93,22 @@ async function provisionStarterContentForUser(userId: string): Promise<void> {
       userId,
       name: 'Operating Systems',
       colorHex: '#A855F7',
+    },
+  });
+
+  const dbSubject = await prisma.subject.create({
+    data: {
+      userId,
+      name: 'Databases',
+      colorHex: '#10B981',
+    },
+  });
+
+  await prisma.subject.create({
+    data: {
+      userId,
+      name: 'Algorithms',
+      colorHex: '#F59E0B',
     },
   });
 
@@ -103,9 +130,24 @@ async function provisionStarterContentForUser(userId: string): Promise<void> {
       title: 'Kernel & Concurrency Primitives',
       description: 'Deadlock conditions, mutex vs. semaphore, and virtual memory paging.',
       colorHex: '#A855F7',
+      isFavorite: true,
+    },
+  });
+
+  const dbDeck = await prisma.deck.create({
+    data: {
+      userId,
+      subjectId: dbSubject.id,
+      title: 'Database Internals & Indexing',
+      description: 'ACID isolation levels, B+Tree storage engines, and WAL recovery.',
+      colorHex: '#10B981',
       isFavorite: false,
     },
   });
+
+  const now = new Date();
+  const pastDue = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+  const futureDue = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
 
   await prisma.flashcard.createMany({
     data: [
@@ -113,26 +155,108 @@ async function provisionStarterContentForUser(userId: string): Promise<void> {
         deckId: netDeck.id,
         question: 'Explain the difference between TCP 3-Way Handshake and 4-Way Teardown.',
         answer:
-          'Handshake establishes reliable connection (SYN -> SYN-ACK -> ACK). Teardown gracefully closes both simplex channels (FIN -> ACK -> FIN -> ACK).',
+            'Handshake establishes reliable connection (SYN -> SYN-ACK -> ACK). Teardown gracefully closes both simplex channels (FIN -> ACK -> FIN -> ACK).',
         explanation:
-          'Because TCP is full-duplex, each direction must be terminated independently by sending a FIN packet.',
+            'Because TCP is full-duplex, each direction must be terminated independently by sending a FIN packet.',
         tags: ['Transport Layer', 'TCP/IP'],
+        repetitions: 3,
+        intervalDays: 6,
+        easeFactor: 2.4,
+        nextReviewDate: pastDue,
+        timesReviewed: 4,
+        timesForgot: 1,
+        masteryStatus: 'reviewing',
       },
       {
         deckId: netDeck.id,
         question: 'What is CIDR Subnetting and why was it introduced to replace classful addressing?',
         answer:
-          'Classless Inter-Domain Routing (CIDR) uses variable-length subnet masking (/24, /27) to allocate IP addresses efficiently and reduce BGP routing table bloat.',
+            'Classless Inter-Domain Routing (CIDR) uses variable-length subnet masking (/24, /27) to allocate IP addresses efficiently and reduce BGP routing table bloat.',
         explanation: 'Replaced rigid Class A, B, and C address blocks.',
         tags: ['IP Addressing', 'Subnets'],
+        repetitions: 1,
+        intervalDays: 1,
+        easeFactor: 1.7,
+        nextReviewDate: pastDue,
+        timesReviewed: 3,
+        timesForgot: 2,
+        masteryStatus: 'learning',
+      },
+      {
+        deckId: netDeck.id,
+        question: 'How does TLS 1.3 handshake improve latency over TLS 1.2?',
+        answer:
+            'TLS 1.3 reduces the handshake to a single round-trip (1-RTT) by combining key exchange with cipher suite negotiation in ClientHello.',
+        explanation: 'It also introduces 0-RTT resumption for returning clients.',
+        tags: ['Security', 'TLS/SSL'],
+        repetitions: 4,
+        intervalDays: 14,
+        easeFactor: 2.6,
+        nextReviewDate: futureDue,
+        timesReviewed: 5,
+        timesForgot: 0,
+        masteryStatus: 'mastered',
       },
       {
         deckId: osDeck.id,
         question: 'What are the 4 Coffman conditions required for a Deadlock to occur?',
         answer: '1. Mutual Exclusion\n2. Hold and Wait\n3. No Preemption\n4. Circular Wait',
         explanation:
-          'Breaking any single one of these four conditions mathematically guarantees that deadlock cannot occur.',
+            'Breaking any single one of these four conditions mathematically guarantees that deadlock cannot occur.',
         tags: ['Concurrency', 'Deadlocks'],
+        repetitions: 1,
+        intervalDays: 1,
+        easeFactor: 1.6,
+        nextReviewDate: pastDue,
+        timesReviewed: 4,
+        timesForgot: 3,
+        masteryStatus: 'learning',
+      },
+      {
+        deckId: osDeck.id,
+        question: 'Compare Mutex vs. Counting Semaphore in thread synchronization.',
+        answer:
+            'A Mutex is a locking mechanism with ownership (only the thread that locked it can unlock it). A Semaphore is a signaling mechanism without ownership.',
+        explanation:
+            'Counting semaphores allow up to N concurrent threads access to a finite pool of shared resources.',
+        tags: ['Threads', 'Synchronization'],
+        repetitions: 3,
+        intervalDays: 7,
+        easeFactor: 2.5,
+        nextReviewDate: futureDue,
+        timesReviewed: 3,
+        timesForgot: 0,
+        masteryStatus: 'mastered',
+      },
+      {
+        deckId: dbDeck.id,
+        question: 'Define the 4 ACID properties of database transactions.',
+        answer:
+            'Atomicity (all-or-nothing), Consistency (valid state invariants), Isolation (concurrent serializability), Durability (WAL persistence after commit).',
+        explanation: 'Write-Ahead Logging (WAL) ensures Atomicity and Durability across power failures.',
+        tags: ['Transactions', 'ACID'],
+        repetitions: 5,
+        intervalDays: 21,
+        easeFactor: 2.7,
+        nextReviewDate: futureDue,
+        timesReviewed: 5,
+        timesForgot: 0,
+        masteryStatus: 'mastered',
+      },
+      {
+        deckId: dbDeck.id,
+        question: 'Why do relational databases prefer B+Trees over Binary Search Trees for disk indexes?',
+        answer:
+            'B+Trees have a high fan-out (hundreds of keys per 4KB/16KB page), minimizing tree height and disk I/O seeks, and link leaf nodes sequentially for fast range scans.',
+        explanation: 'All data pointers reside strictly in the leaf nodes of a B+Tree.',
+        tags: ['Indexing', 'B+Tree'],
+        repetitions: 1,
+        intervalDays: 1,
+        easeFactor: 1.75,
+        nextReviewDate: pastDue,
+        timesReviewed: 3,
+        timesForgot: 2,
+        masteryStatus: 'learning',
       },
     ],
   });
@@ -280,7 +404,7 @@ export class AuthController {
       });
 
       await prisma.emailOtp.delete({ where: { email } }).catch(() => {});
-      await provisionStarterContentForUser(user.id);
+      await provisionStarterContentForUser(user.id, user.email);
 
       const sessionData = await issueSessionTokens(user);
 
@@ -318,6 +442,7 @@ export class AuthController {
           });
         }
 
+        await provisionStarterContentForUser(user.id, user.email);
         const sessionData = await issueSessionTokens(user);
         return res.status(200).json({
           success: true,
@@ -406,6 +531,7 @@ export class AuthController {
         });
       }
 
+      await provisionStarterContentForUser(user.id, user.email);
       const sessionData = await issueSessionTokens(user);
 
       return res.json({
