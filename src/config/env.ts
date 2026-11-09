@@ -8,6 +8,7 @@ export const ENV = {
   JWT_SECRET: process.env.JWT_SECRET || 'recall_fallback_secret_key',
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
   CORS_ORIGIN: process.env.CORS_ORIGIN || '*',
-  SMTP_USER: process.env.SMTP_USER || 'charles.biasora@gmail.com',
-  SMTP_PASS: (process.env.SMTP_PASS || 'iisvqoahikccrdzs').replace(/\s+/g, ''),
+  // SMTP credentials must come from the environment (Vercel env vars / local .env). Never hardcode them.
+  SMTP_USER: (process.env.SMTP_USER || '').replace(/^"|"$/g, '').trim(),
+  SMTP_PASS: (process.env.SMTP_PASS || '').replace(/\s+/g, ''),
 };
