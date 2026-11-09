@@ -10,6 +10,7 @@ export interface SM2Result {
 
 export class SM2Service {
   private static readonly MIN_EASE_FACTOR = 1.3;
+  private static readonly MAX_INTERVAL_DAYS = 180; // 6-month semester ceiling
 
   /**
    * Calculates the next review date and ease factor according to SuperMemo-2.
@@ -52,7 +53,7 @@ export class SM2Service {
     let nextStatus: 'learning' | 'reviewing' | 'mastered';
 
     if (q < 3) {
-      // Failed recall: reset repetitions to 0, card must be reviewed again tomorrow
+      // Failed recall: reset repetitions streak to 0, card returns to learning
       nextRepetitions = 0;
       nextIntervalDays = 1;
       nextStatus = 'learning';
@@ -63,12 +64,19 @@ export class SM2Service {
       } else if (currentRepetitions === 1) {
         nextIntervalDays = 6;
       } else {
-        nextIntervalDays = Math.round(currentIntervalDays * newEaseFactor);
+        const rawInterval = Math.round(currentIntervalDays * newEaseFactor);
+        nextIntervalDays = Math.min(this.MAX_INTERVAL_DAYS, Math.max(1, rawInterval));
+      }
+
+      if (nextIntervalDays > this.MAX_INTERVAL_DAYS) {
+        nextIntervalDays = this.MAX_INTERVAL_DAYS;
       }
 
       nextRepetitions = currentRepetitions + 1;
 
-      if (nextRepetitions >= 4 && newEaseFactor >= 2.3) {
+      // Transparent 4-Streak Rule: 4 consecutive successful reviews graduate to Mastered,
+      // as long as the graduating answer is Good or Easy ("Hard" means the user still struggled).
+      if (nextRepetitions >= 4 && rating !== 'hard') {
         nextStatus = 'mastered';
       } else {
         nextStatus = 'reviewing';

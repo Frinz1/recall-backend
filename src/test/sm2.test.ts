@@ -34,4 +34,16 @@ for (let i = 0; i < 5; i++) {
 }
 assert(ef >= 1.3, 'Ease factor must not drop below 1.3');
 
+// Test 5: 4th consecutive Good graduates regardless of ease factor
+const t5 = SM2Service.calculate('good', 3, 14, 1.9);
+assert(t5.masteryStatus === 'mastered', '4th consecutive Good should graduate to mastered');
+
+// Test 6: Hard never graduates
+const t6 = SM2Service.calculate('hard', 3, 14, 2.5);
+assert(t6.masteryStatus === 'reviewing', 'Hard rating must not graduate to mastered');
+
+// Test 7: 180-day interval cap
+const t7 = SM2Service.calculate('easy', 10, 1256, 2.4);
+assert(t7.intervalDays === 180, 'Interval must be capped at 180 days');
+
 console.log('✅ All Backend SM-2 tests passed successfully!');

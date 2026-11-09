@@ -7,23 +7,6 @@ export class AnalyticsController {
     try {
       const userId = req.user!.id;
 
-      // Normalize any legacy seeded card that was marked mastered without ever being reviewed
-      if (req.user?.email.toLowerCase() === 'charles.biasora@gmail.com') {
-        await prisma.flashcard.updateMany({
-          where: {
-            deck: { userId },
-            lastReviewedDate: null,
-            masteryStatus: 'mastered',
-          },
-          data: {
-            masteryStatus: 'learning',
-            repetitions: 0,
-            timesReviewed: 0,
-            nextReviewDate: new Date(),
-          },
-        });
-      }
-
       // 1. Fetch user cards
       const cards = await prisma.flashcard.findMany({
         where: { deck: { userId } },
@@ -114,9 +97,10 @@ export class AnalyticsController {
       const graduatedProgress = totalCards > 0 ? Math.min(1.0, Math.max(0.0, weightedScore / totalCards)) : 0.0;
       const graduatedProgressPercentage = Math.round(graduatedProgress * 100);
 
-      // Weakness Radar: cards with >= 2 reviews and failure rate >= 40% or ease factor < 1.9
+      // Weakness Radar: unmastered cards with >= 2 reviews and failure rate >= 40% or ease factor < 1.9
       const weakCards = cards
         .filter((c) => {
+          if (c.masteryStatus === 'mastered') return false; // Mastered concepts are graduated off the radar
           if (c.timesReviewed < 2) return false;
           const failRate = c.timesForgot / c.timesReviewed;
           return (c.timesForgot > 0 && failRate >= 0.4) || c.easeFactor < 1.9;
