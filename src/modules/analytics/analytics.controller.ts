@@ -111,10 +111,10 @@ export class AnalyticsController {
         streakDays = 1;
       }
 
-      // Weakness Radar: cards with >= 1 reviews and failure rate >= 40% or ease factor < 1.9
+      // Weakness Radar: cards with >= 2 reviews and failure rate >= 40% or ease factor < 1.9
       const weakCards = cards
         .filter((c) => {
-          if (c.timesReviewed < 1) return false;
+          if (c.timesReviewed < 2) return false;
           const failRate = c.timesForgot / c.timesReviewed;
           return (c.timesForgot > 0 && failRate >= 0.4) || c.easeFactor < 1.9;
         })
