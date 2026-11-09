@@ -5,7 +5,7 @@ import { AuthRequest } from '../../middleware/auth.middleware';
 import { SM2Service, RecallRating } from '../../services/sm2.service';
 
 const reviewSchema = z.object({
-  cardId: z.string().uuid(),
+  cardId: z.string().min(1),
   rating: z.enum(['again', 'hard', 'good', 'easy']),
 });
 

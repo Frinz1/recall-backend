@@ -4,7 +4,7 @@ import { prisma } from '../../config/prisma';
 import { AuthRequest } from '../../middleware/auth.middleware';
 
 const startSessionSchema = z.object({
-  deckId: z.string().uuid(),
+  deckId: z.string().min(1),
 });
 
 const completeSessionSchema = z.object({

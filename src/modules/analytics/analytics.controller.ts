@@ -104,12 +104,15 @@ export class AnalyticsController {
             cursor = new Date(cursor.getTime() - 24 * 60 * 60 * 1000);
           }
         }
-      } else if (
-        req.user?.email.toLowerCase() === 'charles.biasora@gmail.com' &&
-        cards.some((c) => c.timesReviewed > 0)
-      ) {
-        streakDays = 1;
       }
+
+      // 4-Stage Learning Funnel & Graduated Progress
+      const newCards = cards.filter((c) => c.timesReviewed === 0).length;
+      const learningCards = cards.filter((c) => c.timesReviewed > 0 && c.masteryStatus === 'learning').length;
+      const reviewingCards = cards.filter((c) => c.masteryStatus === 'reviewing').length;
+      const weightedScore = (learningCards * 0.25) + (reviewingCards * 0.60) + (masteredCards * 1.0);
+      const graduatedProgress = totalCards > 0 ? Math.min(1.0, Math.max(0.0, weightedScore / totalCards)) : 0.0;
+      const graduatedProgressPercentage = Math.round(graduatedProgress * 100);
 
       // Weakness Radar: cards with >= 2 reviews and failure rate >= 40% or ease factor < 1.9
       const weakCards = cards
@@ -139,8 +142,13 @@ export class AnalyticsController {
         data: {
           metrics: {
             totalCards,
+            newCards,
+            learningCards,
+            reviewingCards,
             masteredCards,
             unmasteredCards,
+            graduatedProgress,
+            graduatedProgressPercentage,
             dueToday,
             reviewedToday,
             retentionRate: Number(retentionRate.toFixed(1)),

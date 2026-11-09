@@ -22,22 +22,6 @@ export class DeckController {
     try {
       const userId = req.user!.id;
 
-      if (req.user?.email.toLowerCase() === 'charles.biasora@gmail.com') {
-        await prisma.flashcard.updateMany({
-          where: {
-            deck: { userId },
-            lastReviewedDate: null,
-            masteryStatus: 'mastered',
-          },
-          data: {
-            masteryStatus: 'learning',
-            repetitions: 0,
-            timesReviewed: 0,
-            nextReviewDate: new Date(),
-          },
-        });
-      }
-
       const decks = await prisma.deck.findMany({
         where: { userId },
         include: {
@@ -52,8 +36,17 @@ export class DeckController {
       const now = new Date();
       const formatted = decks.map((deck) => {
         const totalCards = deck.cards.length;
-        const dueCardsCount = deck.cards.filter((c) => new Date(c.nextReviewDate) <= now).length;
+        const dueCardsCount = deck.cards.filter((c) => {
+          const rev = new Date(c.nextReviewDate);
+          return rev <= now || (rev.getUTCFullYear() === now.getUTCFullYear() && rev.getUTCMonth() === now.getUTCMonth() && rev.getUTCDate() === now.getUTCDate());
+        }).length;
+        const newCount = deck.cards.filter((c) => c.timesReviewed === 0).length;
+        const learningCount = deck.cards.filter((c) => c.timesReviewed > 0 && c.masteryStatus === 'learning').length;
+        const reviewingCount = deck.cards.filter((c) => c.masteryStatus === 'reviewing').length;
         const masteredCount = deck.cards.filter((c) => c.masteryStatus === 'mastered').length;
+        const weightedScore = (learningCount * 0.25) + (reviewingCount * 0.60) + (masteredCount * 1.0);
+        const graduatedProgress = totalCards > 0 ? Math.min(1.0, Math.max(0.0, weightedScore / totalCards)) : 0.0;
+        const graduatedProgressPercentage = Math.round(graduatedProgress * 100);
 
         return {
           id: deck.id,
@@ -65,8 +58,13 @@ export class DeckController {
           subject: deck.subject,
           cards: deck.cards,
           totalCards,
-          dueCardsCount,
+          newCount,
+          learningCount,
+          reviewingCount,
           masteredCount,
+          dueCardsCount,
+          graduatedProgress,
+          graduatedProgressPercentage,
           createdAt: deck.createdAt,
         };
       });
@@ -98,16 +96,30 @@ export class DeckController {
 
       const now = new Date();
       const totalCards = deck.cards.length;
-      const dueCardsCount = deck.cards.filter((c) => new Date(c.nextReviewDate) <= now).length;
+      const dueCardsCount = deck.cards.filter((c) => {
+        const rev = new Date(c.nextReviewDate);
+        return rev <= now || (rev.getUTCFullYear() === now.getUTCFullYear() && rev.getUTCMonth() === now.getUTCMonth() && rev.getUTCDate() === now.getUTCDate());
+      }).length;
+      const newCount = deck.cards.filter((c) => c.timesReviewed === 0).length;
+      const learningCount = deck.cards.filter((c) => c.timesReviewed > 0 && c.masteryStatus === 'learning').length;
+      const reviewingCount = deck.cards.filter((c) => c.masteryStatus === 'reviewing').length;
       const masteredCount = deck.cards.filter((c) => c.masteryStatus === 'mastered').length;
+      const weightedScore = (learningCount * 0.25) + (reviewingCount * 0.60) + (masteredCount * 1.0);
+      const graduatedProgress = totalCards > 0 ? Math.min(1.0, Math.max(0.0, weightedScore / totalCards)) : 0.0;
+      const graduatedProgressPercentage = Math.round(graduatedProgress * 100);
 
       return res.json({
         success: true,
         data: {
           ...deck,
           totalCards,
-          dueCardsCount,
+          newCount,
+          learningCount,
+          reviewingCount,
           masteredCount,
+          dueCardsCount,
+          graduatedProgress,
+          graduatedProgressPercentage,
         },
       });
     } catch (err: any) {
