@@ -97,10 +97,12 @@ export class AnalyticsController {
       const graduatedProgress = totalCards > 0 ? Math.min(1.0, Math.max(0.0, weightedScore / totalCards)) : 0.0;
       const graduatedProgressPercentage = Math.round(graduatedProgress * 100);
 
-      // Weakness Radar: unmastered cards with >= 2 reviews and failure rate >= 40% or ease factor < 1.9
+      // Weakness Radar: unmastered cards with >= 2 reviews and failure rate >= 40% or ease factor < 1.9.
+      // Also surface "mastered" cards with EF < 2.0 — these were mastered under old lenient rules
+      // and still represent a real knowledge gap despite their status badge.
       const weakCards = cards
         .filter((c) => {
-          if (c.masteryStatus === 'mastered') return false; // Mastered concepts are graduated off the radar
+          if (c.masteryStatus === 'mastered' && c.easeFactor >= 2.0) return false; // Genuinely mastered — graduated
           if (c.timesReviewed < 2) return false;
           const failRate = c.timesForgot / c.timesReviewed;
           return (c.timesForgot > 0 && failRate >= 0.4) || c.easeFactor < 1.9;

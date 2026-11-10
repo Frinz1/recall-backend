@@ -74,13 +74,18 @@ export class SM2Service {
 
       nextRepetitions = currentRepetitions + 1;
 
-      // Transparent 4-Streak Rule: 4 consecutive successful reviews graduate to Mastered,
-      // as long as the graduating answer is Good or Easy ("Hard" means the user still struggled).
-      if (nextRepetitions >= 4 && rating !== 'hard') {
-        nextStatus = 'mastered';
-      } else {
-        nextStatus = 'reviewing';
-      }
+      // Mastery Gate — all three conditions must be true:
+      //   1. 4+ consecutive successful reviews (streak proves consistency)
+      //   2. EF >= 2.0 (card is no longer a struggle card — EF < 2.0 means user still forgets too much)
+      //   3. Interval >= 21 days (proven long-term retention — user recalled after 3+ weeks)
+      //   "Hard" is excluded: struggling but passing is not mastery.
+      const isTrulyMastered =
+        nextRepetitions >= 4 &&
+        rating !== 'hard' &&
+        newEaseFactor >= 2.0 &&
+        nextIntervalDays >= 21;
+
+      nextStatus = isTrulyMastered ? 'mastered' : 'reviewing';
     }
 
     const nextReviewDate = new Date(now.getTime() + nextIntervalDays * 24 * 60 * 60 * 1000);
